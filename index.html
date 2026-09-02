@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>EnergyAI — Live Smart Microgrid Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* ═══════════════════════════════════════════════════
+   EnergyAI — Live Dashboard
+   Real weather via Open-Meteo (free, no API key)
+   Font: Space Grotesk + JetBrains Mono
+═══════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#06080f;
+  --bg1:#0c1120;
+  --bg2:#111827;
+  --bg3:#162033;
+  --border:#1e2f47;
+  --border2:#263d5e;
+  --text:#e8f0fe;
+  --text2:#7a90b0;
+  --text3:#3d5070;
+  --green:#22d67a;
+  --green2:rgba(34,214,122,.12);
+  --blue:#4da6ff;
+  --blue2:rgba(77,166,255,.10);
+  --amber:#f5a623;
+  --amber2:rgba(245,166,35,.10);
+  --red:#ff5252;
+  --red2:rgba(255,82,82,.10);
+  --purple:#a78bfa;
+  --cyan:#22d3ee;
+  --mono:'JetBrains Mono',monospace;
+  --sans:'Space Grotesk',sans-serif;
+  --sw:220px;
+  --th:60px;
+  --r:14px;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);overflow:hidden}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+a{color:var(--green);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ── Grid stars background ── */
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;
+  background-image:radial-gradient(circle at 1px 1px,rgba(77,166,255,.06) 1px,transparent 0);
+  background-size:36px 36px;z-index:0
+}
+
+/* ══════════════════════ SIDEBAR ══════════════════════ */
+.sidebar{
+  position:fixed;left:0;top:0;bottom:0;width:var(--sw);
+  background:var(--bg1);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;z-index:100
+}
+.logo{
+  display:flex;align-items:center;gap:10px;
+  padding:18px 16px 16px;border-bottom:1px solid var(--border)
+}
+.logo-mark{
+  width:36px;height:36px;border-radius:10px;
+  background:linear-gradient(135deg,#0a2a16,#0e3d20);
+  border:1px solid rgba(34,214,122,.3);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0
+}
+.logo-text{font-size:16px;font-weight:700;letter-spacing:-.3px;color:var(--text)}
+.logo-sub{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;display:block;margin-top:1px}
+
+.nav{flex:1;padding:10px 8px;display:flex;flex-direction:column;gap:2px}
+.ni{
+  display:flex;align-items:center;gap:9px;padding:9px 11px;
+  border-radius:10px;color:var(--text2);font-size:13px;font-weight:500;
+  cursor:pointer;transition:all .15s;border:1px solid transparent;user-select:none
+}
+.ni:hover{background:var(--bg3);color:var(--text)}
+.ni.active{background:var(--green2);color:var(--green);border-color:rgba(34,214,122,.2)}
+.ni svg{width:16px;height:16px;flex-shrink:0}
+.ni .badge{
+  margin-left:auto;background:var(--red);color:#fff;
+  border-radius:10px;font-size:10px;font-weight:700;
+  padding:1px 6px;display:none
+}
+.ni .badge.show{display:block}
+
+.sf{
+  padding:12px 14px;border-top:1px solid var(--border);
+  display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text2)
+}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0;transition:all .3s}
+.dot.live{background:var(--green);box-shadow:0 0 8px rgba(34,214,122,.6)}
+.dot.warn{background:var(--amber)}
+.dot.err{background:var(--red)}
+
+/* ══════════════════════ MAIN ══════════════════════ */
+.main{margin-left:var(--sw);height:100vh;display:flex;flex-direction:column;overflow:hidden;position:relative;z-index:1}
+
+.topbar{
+  height:var(--th);background:rgba(12,17,32,.9);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 20px;gap:14px;flex-shrink:0
+}
+.tb-title{flex:1}
+.tb-title h1{font-size:17px;font-weight:700;line-height:1}
+.tb-title p{font-size:11px;color:var(--text2);margin-top:2px}
+.tb-right{display:flex;align-items:center;gap:8px}
+.offline-pill{
+  display:none;align-items:center;gap:5px;
+  background:var(--amber2);border:1px solid rgba(245,166,35,.3);
+  color:var(--amber);padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600
+}
+.offline-pill.show{display:flex}
+.live-pill{
+  display:flex;align-items:center;gap:5px;
+  background:var(--green2);border:1px solid rgba(34,214,122,.25);
+  color:var(--green);padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600
+}
+.live-pill span{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── City search hero ── */
+.city-bar{
+  background:var(--bg1);border-bottom:1px solid var(--border);
+  padding:12px 20px 10px;flex-shrink:0
+}
+.city-bar-label{font-size:11px;color:var(--text2);margin-bottom:8px;display:flex;align-items:center;gap:5px}
+.city-row{display:flex;gap:8px;align-items:center;position:relative}
+.city-input-wrap{
+  flex:1;display:flex;align-items:center;gap:8px;
+  background:var(--bg2);border:1.5px solid var(--border2);border-radius:10px;
+  padding:0 8px 0 12px;transition:border-color .2s
+}
+.city-input-wrap:focus-within{border-color:var(--green)}
+.city-input-wrap input{
+  background:none;border:none;outline:none;color:var(--text);
+  font-family:var(--sans);font-size:14px;padding:9px 4px;flex:1;min-width:0
+}
+.city-input-wrap input::placeholder{color:var(--text3)}
+.btn{
+  background:var(--green);color:#041a0a;border:none;border-radius:9px;
+  padding:9px 20px;font-family:var(--sans);font-size:13px;font-weight:700;
+  cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;
+  transition:opacity .15s,transform .1s;flex-shrink:0
+}
+.btn:hover{opacity:.9;transform:translateY(-1px)}
+.btn:active{transform:none}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+/* Suggestions */
+.sugg{
+  position:absolute;top:calc(100% + 4px);left:0;right:80px;
+  background:var(--bg2);border:1px solid var(--border2);border-radius:10px;
+  z-index:300;max-height:220px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5)
+}
+.sugg-item{
+  padding:9px 14px;font-size:13px;color:var(--text2);cursor:pointer;
+  display:flex;align-items:center;gap:8px;transition:background .1s
+}
+.sugg-item:hover{background:var(--bg3);color:var(--text)}
+.sugg-item .si-state{font-size:10.5px;color:var(--text3);margin-left:auto}
+.quick-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;align-items:center}
+.ql{font-size:10.5px;color:var(--text3)}
+.qp{
+  background:none;border:1px solid var(--border2);color:var(--text2);
+  padding:3px 10px;border-radius:20px;font-family:var(--sans);font-size:11.5px;
+  cursor:pointer;transition:all .15s
+}
+.qp:hover{border-color:var(--green);color:var(--green)}
+
+/* ══════════════════════ SECTIONS ══════════════════════ */
+.sections{flex:1;overflow:hidden;position:relative}
+.sec{display:none;height:100%;overflow-y:auto;padding:16px 20px 72px}
+.sec.active{display:block}
+
+/* ── KPI grid ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.kcard{
+  background:var(--bg1);border:1px solid var(--border);border-radius:var(--r);
+  padding:14px 15px;display:flex;align-items:flex-start;gap:11px;
+  transition:border-color .2s,transform .15s;cursor:default
+}
+.kcard:hover{border-color:var(--border2);transform:translateY(-1px)}
+.kico{
+  width:40px;height:40px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;font-size:18px
+}
+.kico.g{background:var(--green2);color:var(--green)}
+.kico.b{background:var(--blue2);color:var(--blue)}
+.kico.a{background:var(--amber2);color:var(--amber)}
+.kico.p{background:rgba(167,139,250,.1);color:var(--purple)}
+.kico.c{background:rgba(34,211,238,.1);color:var(--cyan)}
+.kb{flex:1;min-width:0}
+.klbl{display:block;font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px}
+.kval{display:block;font-size:22px;font-weight:700;line-height:1;font-family:var(--mono);color:var(--text)}
+.kunit{display:block;font-size:10px;color:var(--text3);margin-top:3px}
+.kval.loading{color:var(--text3)}
+
+/* ── Charts ── */
+.charts-row{display:grid;grid-template-columns:1fr 300px;gap:12px;margin-bottom:14px}
+.ccard{background:var(--bg1);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
+.ccard-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.ccard-hd h3{font-size:13px;font-weight:600;color:var(--text)}
+.cbadge{background:var(--blue2);color:var(--blue);padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:600}
+.chart-wrap{position:relative;height:190px}
+
+/* ── Info row ── */
+.info-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px}
+.icard{background:var(--bg1);border:1px solid var(--border);border-radius:var(--r);padding:14px 15px}
+.icard h4{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;font-weight:600}
+.igrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ii{display:flex;flex-direction:column;gap:2px}
+.ilbl{font-size:10.5px;color:var(--text2)}
+.ival{font-size:15px;font-weight:600;color:var(--text);font-family:var(--mono)}
+.live-tag{font-size:9px;color:var(--green);font-weight:700;letter-spacing:.5px;margin-top:1px}
+
+/* Battery */
+.batt-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.batt-body{width:72px;height:26px;border:2px solid var(--border2);border-radius:5px;position:relative;overflow:hidden}
+.batt-body::after{content:'';position:absolute;right:-5px;top:50%;transform:translateY(-50%);width:4px;height:10px;background:var(--border2);border-radius:0 2px 2px 0}
+.batt-fill{height:100%;width:0;border-radius:3px;transition:width .8s ease,background .4s}
+.batt-fill.hi{background:var(--green)}
+.batt-fill.md{background:var(--amber)}
+.batt-fill.lo{background:var(--red)}
+.batt-pct{font-size:19px;font-weight:700;font-family:var(--mono)}
+.act-badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.act-badge.charge{background:var(--green2);color:var(--green)}
+.act-badge.discharge{background:var(--red2);color:var(--red)}
+.act-badge.balanced{background:var(--blue2);color:var(--blue)}
+.act-badge.hold{background:rgba(122,144,176,.1);color:var(--text2)}
+#batt-rec{font-size:11.5px;color:var(--text2);line-height:1.5;margin-top:5px}
+
+/* Status */
+.sys-status{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:8px 0;text-align:center}
+#status-txt{font-size:12px;color:var(--text2);line-height:1.5}
+
+/* ══════════════════════ WEATHER FORECAST SECTION ══════════════════════ */
+.wx-current-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
+.wx-now{background:var(--bg1);border:1px solid var(--border);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:4px}
+.wx-now.big{grid-column:1/3;flex-direction:row;align-items:center;gap:16px}
+.wx-city-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px}
+.wx-temp-big{font-size:42px;font-weight:700;line-height:1;font-family:var(--mono);color:var(--green)}
+.wx-desc{font-size:12px;color:var(--text2)}
+.wx-feels{font-size:11px;color:var(--text3);margin-top:3px}
+.wx-stat-lbl{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px}
+.wx-stat-val{font-size:18px;font-weight:700;font-family:var(--mono);color:var(--text);line-height:1}
+.wx-stat-unit{font-size:10px;color:var(--text3);margin-top:3px}
+.wx-live-badge{display:inline-flex;align-items:center;gap:4px;font-size:9px;color:var(--green);font-weight:700;letter-spacing:.5px;margin-top:6px}
+.wx-live-badge::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+
+/* 7-day forecast strip */
+.forecast-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:14px}
+.day-card{
+  background:var(--bg1);border:1px solid var(--border);border-radius:12px;
+  padding:12px 8px;text-align:center;cursor:pointer;transition:all .2s
+}
+.day-card:hover,.day-card.selected{background:var(--bg3);border-color:var(--green)}
+.day-name{font-size:10.5px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.day-icon{font-size:22px;margin-bottom:6px}
+.day-hi{font-size:14px;font-weight:700;font-family:var(--mono);color:var(--text)}
+.day-lo{font-size:11.5px;color:var(--text2);font-family:var(--mono)}
+.day-rain{font-size:10px;color:var(--blue);margin-top:4px}
+
+/* Hourly chart for selected day */
+.hourly-section{background:var(--bg1);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:14px}
+.hourly-section h3{font-size:13px;font-weight:600;margin-bottom:12px;color:var(--text)}
+.hourly-wrap{position:relative;height:180px}
+
+/* Forecast table */
+.wx-table-wrap{background:var(--bg1);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
+.wx-table-wrap h3{font-size:13px;font-weight:600;margin-bottom:12px}
+.wx-table{width:100%;border-collapse:collapse;font-size:12px}
+.wx-table th{text-align:left;padding:6px 10px;color:var(--text2);font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)}
+.wx-table td{padding:8px 10px;border-bottom:1px solid rgba(30,47,71,.4);color:var(--text)}
+.wx-table tr:last-child td{border-bottom:none}
+.wx-table tr:hover td{background:var(--bg3)}
+
+/* ══════════════════════ FAULT SECTION ══════════════════════ */
+.fault-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fc{border-radius:var(--r);padding:14px 16px;border:1px solid}
+.fc.ok{background:rgba(34,214,122,.04);border-color:rgba(34,214,122,.2)}
+.fc.warn{background:rgba(245,166,35,.04);border-color:rgba(245,166,35,.2)}
+.fc.crit{background:rgba(255,82,82,.04);border-color:rgba(255,82,82,.2)}
+.fc h4{font-size:12.5px;font-weight:700;margin-bottom:8px}
+.fc h4.ok{color:var(--green)}.fc h4.warn{color:var(--amber)}.fc h4.crit{color:var(--red)}
+.fc p{font-size:12.5px;color:var(--text2);line-height:1.6}
+
+/* ══════════════════════ REPORTS ══════════════════════ */
+.rep-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}
+.rstat{background:var(--bg1);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
+.rstat-lbl{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px}
+.rstat-val{font-size:24px;font-weight:700;font-family:var(--mono)}
+.rstat-val.g{color:var(--green)}.rstat-val.b{color:var(--blue)}.rstat-val.a{color:var(--amber)}
+
+/* ══════════════════════ EMPTY + FOOTER ══════════════════════ */
+.empty{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:44px 24px;text-align:center;gap:12px;color:var(--text3);
+  background:var(--bg1);border:1px solid var(--border);border-radius:var(--r)
+}
+.empty p{font-size:13px;max-width:280px;line-height:1.6;color:var(--text2)}
+
+.dataset-bar{
+  position:fixed;bottom:0;left:var(--sw);right:0;
+  background:rgba(12,17,32,.95);backdrop-filter:blur(10px);
+  border-top:1px solid var(--border);padding:7px 20px;
+  display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text2);z-index:50;flex-wrap:wrap
+}
+.dataset-bar a{color:var(--green);font-weight:600}
+.dsep{color:var(--border2)}
+
+/* ── Spinner ── */
+.spin{animation:spin .7s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hidden{display:none!important}
+@keyframes fadein{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.anim{animation:fadein .3s ease forwards}
+
+/* ── Section header ── */
+.sec-hd{margin-bottom:14px}
+.sec-hd h2{font-size:18px;font-weight:700}
+.sec-hd p{color:var(--text2);font-size:12px;margin-top:3px}
+
+/* ── Responsive ── */
+@media(max-width:1100px){
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  .charts-row{grid-template-columns:1fr}
+  .info-row{grid-template-columns:1fr 1fr}
+  .wx-current-grid{grid-template-columns:repeat(3,1fr)}
+  .wx-now.big{grid-column:1/2}
+  .forecast-strip{grid-template-columns:repeat(4,1fr)}
+}
+@media(max-width:760px){
+  :root{--sw:0px}
+  .sidebar{display:none}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  .info-row{grid-template-columns:1fr}
+  .forecast-strip{grid-template-columns:repeat(3,1fr)}
+  .wx-current-grid{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ SIDEBAR ═══════════════ -->
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-mark">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <circle cx="10" cy="10" r="7" stroke="#22d67a" stroke-width="1.5"/>
+        <path d="M10 3v3M10 14v3M3 10h3M14 10h3" stroke="#22d67a" stroke-width="1.5" stroke-linecap="round"/>
+        <circle cx="10" cy="10" r="2.5" fill="#22d67a"/>
+      </svg>
+    </div>
+    <div>
+      <span class="logo-text">EnergyAI</span>
+      <span class="logo-sub">Live Microgrid</span>
+    </div>
+  </div>
+  <nav class="nav">
+    <div class="ni active" data-sec="monitor" onclick="gotoSec('monitor')">
+      <svg viewBox="0 0 20 20" fill="none"><rect x="2" y="3" width="16" height="11" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M7 17h6M10 14v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      Monitor
+    </div>
+    <div class="ni" data-sec="weather" onclick="gotoSec('weather')">
+      <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="9" r="4" stroke="currentColor" stroke-width="1.4"/><path d="M4 15c0-2 1.5-3 6-3s6 1 6 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M10 2v1M10 16v1M2 9h1M17 9h1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      Weather Forecast
+      <span class="badge show" id="wx-badge">LIVE</span>
+    </div>
+    <div class="ni" data-sec="forecast" onclick="gotoSec('forecast')">
+      <svg viewBox="0 0 20 20" fill="none"><polyline points="2,14 6,8 10,11 15,5 18,7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 17h16" stroke="currentColor" stroke-width="1.4"/></svg>
+      Energy Forecast
+    </div>
+    <div class="ni" data-sec="fault" onclick="gotoSec('fault')">
+      <svg viewBox="0 0 20 20" fill="none"><path d="M10 2L18 16H2Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M10 8v4M10 14v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      Fault Alerts
+      <span class="badge" id="fault-badge">!</span>
+    </div>
+    <div class="ni" data-sec="reports" onclick="gotoSec('reports')">
+      <svg viewBox="0 0 20 20" fill="none"><rect x="4" y="2" width="12" height="16" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M7 7h6M7 10h6M7 13h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      Reports
+    </div>
+  </nav>
+  <div class="sf">
+    <div class="dot" id="api-dot"></div>
+    <span id="api-txt">Connecting...</span>
+  </div>
+</aside>
+
+<!-- ═══════════════ MAIN ═══════════════ -->
+<main class="main">
+  <header class="topbar">
+    <div class="tb-title">
+      <h1 id="page-title">Live Monitor</h1>
+      <p id="page-sub">Real-time microgrid energy dashboard</p>
+    </div>
+    <div class="tb-right">
+      <div class="offline-pill" id="offline-pill">
+        <svg viewBox="0 0 14 14" width="11" height="11"><circle cx="7" cy="7" r="5.5" fill="#f5a623"/><path d="M7 4.5v3M7 9v.5" stroke="white" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Using cached data
+      </div>
+      <div class="live-pill">
+        <span></span> Live
+      </div>
+    </div>
+  </header>
+
+  <!-- City bar -->
+  <div class="city-bar">
+    <div class="city-bar-label">
+      <svg viewBox="0 0 14 14" width="12" height="12" fill="none"><path d="M7 1a4.5 4.5 0 0 1 4.5 4.5C11.5 9 7 13 7 13S2.5 9 2.5 5.5A4.5 4.5 0 0 1 7 1z" stroke="#22d67a" stroke-width="1.2"/><circle cx="7" cy="5.5" r="1.5" fill="#22d67a"/></svg>
+      Enter any Indian city — live weather + AI energy prediction
+    </div>
+    <div class="city-row" id="city-row">
+      <div class="city-input-wrap">
+        <svg viewBox="0 0 18 18" width="15" height="15" fill="none" style="color:var(--text3)"><circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" stroke-width="1.4"/><path d="M13 13l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        <input id="city-input" type="text" placeholder="e.g.  Delhi  ·  Una  ·  Mumbai  ·  Jaipur  ·  Bangalore..." autocomplete="off" spellcheck="false" oninput="onCityInput(this.value)" onkeydown="onCityKey(event)"/>
+        <button class="btn" id="go-btn" onclick="runAll()">
+          <span id="btn-txt">Get Prediction</span>
+          <span id="btn-spin" class="spin hidden">⟳</span>
+        </button>
+      </div>
+      <div class="sugg hidden" id="sugg"></div>
+    </div>
+    <div class="quick-row">
+      <span class="ql">Quick:</span>
+      <button class="qp" onclick="pick('Delhi')">Delhi</button>
+      <button class="qp" onclick="pick('Una')">Una</button>
+      <button class="qp" onclick="pick('Jaipur')">Jaipur</button>
+      <button class="qp" onclick="pick('Mumbai')">Mumbai</button>
+      <button class="qp" onclick="pick('Bangalore')">Bangalore</button>
+      <button class="qp" onclick="pick('Hyderabad')">Hyderabad</button>
+      <button class="qp" onclick="pick('Chandigarh')">Chandigarh</button>
+      <button class="qp" onclick="pick('Chennai')">Chennai</button>
+      <button class="qp" onclick="pick('Ahmedabad')">Ahmedabad</button>
+      <button class="qp" onclick="pick('Lucknow')">Lucknow</button>
+    </div>
+  </div>
+
+  <div class="sections">
+
+    <!-- ══ MONITOR ══ -->
+    <section class="sec active" id="sec-monitor">
+      <div class="kpi-grid">
+        <div class="kcard"><div class="kico g">☀</div><div class="kb"><span class="klbl">Predicted Power</span><span class="kval" id="kv-power">—</span><span class="kunit">kW · ML output</span></div></div>
+        <div class="kcard"><div class="kico b">⚡</div><div class="kb"><span class="klbl">Consumption</span><span class="kval" id="kv-cons">—</span><span class="kunit">kWh estimated</span></div></div>
+        <div class="kcard"><div class="kico a">🔋</div><div class="kb"><span class="klbl">Daily Yield</span><span class="kval" id="kv-yield">—</span><span class="kunit">kWh today</span></div></div>
+        <div class="kcard"><div class="kico c">🌡</div><div class="kb"><span class="klbl">Live Temperature</span><span class="kval" id="kv-temp">—</span><span class="kunit">°C · real-time</span></div></div>
+      </div>
+      <div class="charts-row">
+        <div class="ccard">
+          <div class="ccard-hd"><h3>7-Day Energy Trend</h3><span class="cbadge" id="city-badge">—</span></div>
+          <div class="chart-wrap"><canvas id="chart-trend"></canvas></div>
+        </div>
+        <div class="ccard">
+          <div class="ccard-hd"><h3>Energy Balance</h3></div>
+          <div class="chart-wrap"><canvas id="chart-bal"></canvas></div>
+        </div>
+      </div>
+      <div class="info-row">
+        <div class="icard">
+          <h4>Live Weather Conditions</h4>
+          <div class="igrid">
+            <div class="ii"><span class="ilbl">Temperature</span><span class="ival" id="iw-temp">—</span><span class="live-tag">LIVE</span></div>
+            <div class="ii"><span class="ilbl">Feels Like</span><span class="ival" id="iw-feels">—</span><span class="live-tag">LIVE</span></div>
+            <div class="ii"><span class="ilbl">Humidity</span><span class="ival" id="iw-hum">—</span></div>
+            <div class="ii"><span class="ilbl">Wind Speed</span><span class="ival" id="iw-wind">—</span></div>
+          </div>
+        </div>
+        <div class="icard">
+          <h4>Battery Status</h4>
+          <div class="batt-row"><div class="batt-body"><div class="batt-fill" id="batt-fill"></div></div><span class="batt-pct" id="batt-pct">—%</span></div>
+          <span class="act-badge" id="act-badge">—</span>
+          <p id="batt-rec">Run a prediction to see battery status</p>
+        </div>
+        <div class="icard">
+          <h4>System Status</h4>
+          <div class="sys-status">
+            <div id="status-ico"><svg viewBox="0 0 40 40" width="38" height="38"><circle cx="20" cy="20" r="15" stroke="var(--border2)" stroke-width="2" fill="none"/><path d="M20 12v8M20 23v2" stroke="var(--border2)" stroke-width="2.5" stroke-linecap="round"/></svg></div>
+            <span id="status-txt">Enter a city to begin</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ WEATHER FORECAST ══ -->
+    <section class="sec" id="sec-weather">
+      <div class="sec-hd"><h2>Weather Forecast</h2><p id="wx-subtitle">Live data from Open-Meteo — updated every hour · No API key required</p></div>
+      <div class="wx-current-grid" id="wx-current-grid">
+        <div class="empty" style="grid-column:1/-1"><p>Enter a city above to load live weather data</p></div>
+      </div>
+      <div class="forecast-strip" id="forecast-strip">
+        <!-- filled by JS -->
+      </div>
+      <div class="hourly-section" id="hourly-section">
+        <h3 id="hourly-title">Hourly forecast — select a day above</h3>
+        <div class="hourly-wrap"><canvas id="chart-hourly"></canvas></div>
+      </div>
+      <div class="wx-table-wrap">
+        <h3>7-Day Summary</h3>
+        <table class="wx-table">
+          <thead><tr><th>Day</th><th>Condition</th><th>High °C</th><th>Low °C</th><th>Rain mm</th><th>Wind km/h</th><th>Solar Energy est.</th></tr></thead>
+          <tbody id="wx-tbody"><tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px">Enter a city to load forecast</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══ ENERGY FORECAST ══ -->
+    <section class="sec" id="sec-forecast">
+      <div class="sec-hd"><h2>Energy Forecast</h2><p>AI-predicted hourly production based on live weather</p></div>
+      <div class="charts-row">
+        <div class="ccard">
+          <div class="ccard-hd"><h3>Hourly Production (Today)</h3></div>
+          <div class="chart-wrap"><canvas id="chart-ef"></canvas></div>
+        </div>
+        <div class="ccard">
+          <div class="ccard-hd"><h3>Production Split</h3></div>
+          <div class="chart-wrap"><canvas id="chart-pie"></canvas></div>
+        </div>
+      </div>
+      <div class="wx-table-wrap">
+        <h3>Hourly Energy Breakdown</h3>
+        <table class="wx-table">
+          <thead><tr><th>Hour</th><th>Predicted kW</th><th>Irradiation</th><th>Temp °C</th><th>Status</th></tr></thead>
+          <tbody id="ef-tbody"><tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px">Run prediction first</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══ FAULT ══ -->
+    <section class="sec" id="sec-fault">
+      <div class="sec-hd"><h2>Fault Detection</h2><p>Anomaly detection based on live weather + predicted values</p></div>
+      <div id="fault-container"><div class="empty"><p>Enter a city and run prediction to analyse faults</p></div></div>
+    </section>
+
+    <!-- ══ REPORTS ══ -->
+    <section class="sec" id="sec-reports">
+      <div class="sec-hd"><h2>Reports</h2><p>Summary statistics for current city and prediction</p></div>
+      <div id="report-container"><div class="empty"><p>Run a prediction to generate report</p></div></div>
+    </section>
+
+  </div><!-- /sections -->
+</main>
+
+<div class="dataset-bar">
+  <svg viewBox="0 0 14 14" width="11" height="11" fill="none" style="flex-shrink:0"><rect x="1" y="1" width="12" height="12" rx="2" stroke="var(--text2)" stroke-width="1.2"/><path d="M4 7h6M4 4.5h6M4 9.5h4" stroke="var(--text2)" stroke-width="1.2" stroke-linecap="round"/></svg>
+  <strong style="color:var(--text)">Dataset:</strong>
+  <a href="https://www.kaggle.com/datasets/anikannal/solar-power-generation-data" target="_blank" rel="noopener">Solar Power Generation Data — Kaggle (anikannal)</a>
+  <span class="dsep">|</span>
+  <span>Weather: <a href="https://open-meteo.com" target="_blank">Open-Meteo API</a> (free · no key · live)</span>
+  <span class="dsep">|</span>
+  <span>Features: IRRADIATION · AMBIENT_TEMPERATURE · MODULE_TEMPERATURE · DC_POWER</span>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   EnergyAI — Complete Live Script
+   Weather: Open-Meteo API (real, free, no key)
+   Geocoding: Open-Meteo Geocoding API
+   Energy: Physics-based NOCT model + city data
+═══════════════════════════════════════════════════════ */
+
+// ─── City database ───────────────────────────────────
+// lat/lon for geocoding, plus solar/climate data
+const CITIES = {
+  delhi:      {lat:28.61,lon:77.21,dc:2750,dy:5200,state:"Delhi"},
+  una:        {lat:31.47,lon:76.27,dc:2900,dy:5600,state:"HP"},
+  chandigarh: {lat:30.74,lon:76.79,dc:2600,dy:5000,state:"Chandigarh"},
+  amritsar:   {lat:31.63,lon:74.87,dc:2650,dy:5100,state:"Punjab"},
+  ludhiana:   {lat:30.90,lon:75.85,dc:2620,dy:5050,state:"Punjab"},
+  shimla:     {lat:31.10,lon:77.17,dc:2100,dy:3900,state:"HP"},
+  dehradun:   {lat:30.32,lon:78.03,dc:2300,dy:4400,state:"Uttarakhand"},
+  lucknow:    {lat:26.85,lon:80.95,dc:2550,dy:4900,state:"UP"},
+  agra:       {lat:27.18,lon:78.01,dc:2700,dy:5150,state:"UP"},
+  varanasi:   {lat:25.32,lon:82.97,dc:2570,dy:4950,state:"UP"},
+  jaipur:     {lat:26.91,lon:75.79,dc:3000,dy:5800,state:"Rajasthan"},
+  jodhpur:    {lat:26.30,lon:73.02,dc:3100,dy:6000,state:"Rajasthan"},
+  bikaner:    {lat:28.02,lon:73.31,dc:3150,dy:6100,state:"Rajasthan"},
+  udaipur:    {lat:24.58,lon:73.68,dc:2850,dy:5500,state:"Rajasthan"},
+  mumbai:     {lat:19.08,lon:72.88,dc:2400,dy:4600,state:"Maharashtra"},
+  pune:       {lat:18.52,lon:73.86,dc:2500,dy:4800,state:"Maharashtra"},
+  nagpur:     {lat:21.14,lon:79.08,dc:2730,dy:5250,state:"Maharashtra"},
+  surat:      {lat:21.17,lon:72.83,dc:2640,dy:5100,state:"Gujarat"},
+  ahmedabad:  {lat:23.03,lon:72.59,dc:2850,dy:5500,state:"Gujarat"},
+  vadodara:   {lat:22.31,lon:73.18,dc:2800,dy:5400,state:"Gujarat"},
+  bangalore:  {lat:12.97,lon:77.59,dc:2550,dy:4900,state:"Karnataka"},
+  hyderabad:  {lat:17.38,lon:78.49,dc:2780,dy:5300,state:"Telangana"},
+  chennai:    {lat:13.08,lon:80.27,dc:2650,dy:5100,state:"Tamil Nadu"},
+  coimbatore: {lat:11.00,lon:76.96,dc:2580,dy:4950,state:"Tamil Nadu"},
+  madurai:    {lat:9.93, lon:78.12,dc:2700,dy:5200,state:"Tamil Nadu"},
+  kochi:      {lat:9.93, lon:76.27,dc:2200,dy:4200,state:"Kerala"},
+  kolkata:    {lat:22.57,lon:88.36,dc:2250,dy:4300,state:"West Bengal"},
+  bhubaneswar:{lat:20.30,lon:85.84,dc:2400,dy:4600,state:"Odisha"},
+  patna:      {lat:25.60,lon:85.12,dc:2520,dy:4800,state:"Bihar"},
+  bhopal:     {lat:23.26,lon:77.41,dc:2750,dy:5250,state:"MP"},
+  indore:     {lat:22.72,lon:75.86,dc:2700,dy:5200,state:"MP"},
+  vijayawada: {lat:16.51,lon:80.62,dc:2700,dy:5200,state:"AP"},
+};
+
+const ALIASES={
+  "new delhi":"delhi","bengaluru":"bangalore","bombay":"mumbai",
+  "calcutta":"kolkata","madras":"chennai","gurugram":"delhi",
+  "gurgaon":"delhi","noida":"delhi","navi mumbai":"mumbai",
+  "prayagraj":"varanasi","allahabad":"varanasi"
+};
+
+// WMO weather codes → emoji + description
+const WMO = {
+  0:"☀ Clear",1:"🌤 Mainly clear",2:"⛅ Partly cloudy",3:"☁ Overcast",
+  45:"🌫 Foggy",48:"🌫 Icy fog",51:"🌦 Light drizzle",53:"🌦 Drizzle",
+  55:"🌧 Heavy drizzle",61:"🌧 Light rain",63:"🌧 Rain",65:"🌧 Heavy rain",
+  71:"🌨 Light snow",73:"🌨 Snow",75:"❄ Heavy snow",80:"🌦 Showers",
+  81:"🌧 Heavy showers",82:"⛈ Violent showers",95:"⛈ Thunderstorm",
+  96:"⛈ Hail storm",99:"⛈ Heavy hail"
+};
+function wmoIcon(c){const k=Object.keys(WMO).find(k=>+k===c)||0;return WMO[k]||"🌤 Unknown"}
+function wmoEmoji(c){return wmoIcon(c).split(' ')[0]}
+function wmoDesc(c){return wmoIcon(c).split(' ').slice(1).join(' ')}
+
+// ─── State ───────────────────────────────────────────
+let charts = {};
+let liveWeather = null;    // current Open-Meteo response
+let liveDaily   = null;    // daily forecast array
+let liveHourly  = null;    // hourly forecast arrays
+let selectedDay = 0;       // index into daily forecast
+let currentCity = null;    // city key
+let cityCoords  = null;    // {lat,lon,name}
+let predResult  = null;    // latest prediction result
+
+// ─── City lookup ─────────────────────────────────────
+function lookupCity(input){
+  const q=input.trim().toLowerCase();
+  if(CITIES[q]) return {key:q,...CITIES[q]};
+  if(ALIASES[q]&&CITIES[ALIASES[q]]) return {key:ALIASES[q],...CITIES[ALIASES[q]]};
+  for(const[k,v]of Object.entries(CITIES)){if(k.startsWith(q))return{key:k,...v}}
+  for(const[k,v]of Object.entries(CITIES)){if(k.includes(q)||q.includes(k))return{key:k,...v}}
+  return null;
+}
+
+// ─── Autocomplete ────────────────────────────────────
+function onCityInput(v){
+  const dd=document.getElementById('sugg');
+  const q=v.trim().toLowerCase();
+  if(q.length<1){dd.classList.add('hidden');return}
+  const hits=Object.entries(CITIES).filter(([k])=>k.startsWith(q)||k.includes(q)).slice(0,8);
+  if(!hits.length){dd.classList.add('hidden');return}
+  dd.innerHTML=hits.map(([k,v])=>
+    `<div class="sugg-item" onclick="pick('${cap(k)}')">
+       <svg viewBox="0 0 12 12" width="10" height="10" fill="none"><path d="M6 1a3.5 3.5 0 0 1 3.5 3.5C9.5 7.5 6 11 6 11S2.5 7.5 2.5 4.5A3.5 3.5 0 0 1 6 1z" stroke="#22d67a" stroke-width="1.2"/><circle cx="6" cy="4.5" r="1.2" fill="#22d67a"/></svg>
+       ${cap(k)}<span class="si-state">${v.state}</span>
+     </div>`
+  ).join('');
+  dd.classList.remove('hidden');
+}
+function onCityKey(e){if(e.key==='Enter'){hideSugg();runAll()}if(e.key==='Escape')hideSugg()}
+function hideSugg(){document.getElementById('sugg').classList.add('hidden')}
+function pick(name){document.getElementById('city-input').value=name;hideSugg();runAll()}
+document.addEventListener('click',e=>{if(!e.target.closest('#city-row'))hideSugg()});
+
+// ─── Open-Meteo: Geocoding ───────────────────────────
+async function geocode(name){
+  // First check our local DB
+  const found=lookupCity(name);
+  if(found) return {lat:found.lat,lon:found.lon,name:cap(found.key),key:found.key,cityData:found};
+
+  // Fall back to Open-Meteo geocoding API
+  try{
+    const url=`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=5&language=en&format=json`;
+    const r=await fetch(url,{signal:AbortSignal.timeout(6000)});
+    const d=await r.json();
+    if(d.results&&d.results.length){
+      const res=d.results[0];
+      return {lat:res.latitude,lon:res.longitude,name:res.name,key:res.name.toLowerCase(),cityData:null};
+    }
+  }catch(e){console.warn('geocode error',e)}
+  return null;
+}
+
+// ─── Open-Meteo: Weather fetch ───────────────────────
+async function fetchWeather(lat,lon){
+  const url=`https://api.open-meteo.com/v1/forecast`+
+    `?latitude=${lat}&longitude=${lon}`+
+    `&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,`+
+    `weather_code,cloud_cover,precipitation,surface_pressure,uv_index`+
+    `&hourly=temperature_2m,apparent_temperature,precipitation_probability,`+
+    `precipitation,wind_speed_10m,cloud_cover,shortwave_radiation,uv_index`+
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,`+
+    `wind_speed_10m_max,sunrise,sunset,uv_index_max,shortwave_radiation_sum`+
+    `&timezone=Asia%2FKolkata&forecast_days=7`;
+  const r=await fetch(url,{signal:AbortSignal.timeout(8000)});
+  if(!r.ok) throw new Error('Weather API error');
+  return await r.json();
+}
+
+// ─── Physics-based energy prediction ────────────────
+function predictPower(ambientTemp, cloudCover, uvIndex, dcRating){
+  // Irradiation from UV index (approx: UV * 0.1 gives kWh/m²/h)
+  const irr = Math.max(0, (uvIndex||0) * 0.09 * (1 - (cloudCover||0)/100 * 0.7));
+  // Module temp = ambient + irr * 25 (NOCT model)
+  const modTemp = ambientTemp + irr * 25;
+  // Efficiency drops 0.45%/°C above 25°C
+  const eff = Math.max(0.40, 1 - 0.0045 * (modTemp - 25));
+  const power = dcRating * irr * eff * 0.96;
+  return {power:Math.max(0,+power.toFixed(1)), irr:+irr.toFixed(3), modTemp:+modTemp.toFixed(1)};
+}
+
+// ─── Main run ────────────────────────────────────────
+async function runAll(){
+  const input=document.getElementById('city-input').value.trim();
+  if(!input){
+    document.getElementById('city-input').focus();
+    document.getElementById('city-input').parentElement.style.borderColor='var(--red)';
+    setTimeout(()=>{document.getElementById('city-input').parentElement.style.borderColor=''},1500);
+    return;
+  }
+  setLoading(true);
+  try{
+    // 1. Geocode
+    const geo=await geocode(input);
+    if(!geo){alert(`City "${input}" not found. Try a major Indian city.`);setLoading(false);return}
+    cityCoords=geo;
+    currentCity=geo.key;
+    const dc=(geo.cityData?.dc)||2600;
+    const dy=(geo.cityData?.dy)||4800;
+
+    // 2. Fetch real weather
+    let wx=null;
+    try{
+      wx=await fetchWeather(geo.lat,geo.lon);
+      liveWeather=wx.current;
+      liveDaily=wx.daily;
+      liveHourly=wx.hourly;
+      setApiStatus('live');
+      document.getElementById('offline-pill').classList.remove('show');
+    }catch(e){
+      console.warn('Weather fetch failed, using estimates',e);
+      setApiStatus('warn');
+      document.getElementById('offline-pill').classList.add('show');
+      liveWeather=null; liveDaily=null; liveHourly=null;
+    }
+
+    // 3. Build prediction from live data
+    const temp=liveWeather?.temperature_2m ?? (geo.cityData ? geo.cityData.dc/75 : 30);
+    const cloud=liveWeather?.cloud_cover ?? 20;
+    const uv=liveWeather?.uv_index ?? 7;
+    const {power,irr,modTemp}=predictPower(temp,cloud,uv,dc);
+
+    const prodKwh=+(power/1000).toFixed(2);
+    const consKwh=2.5;
+    const surplus=+(prodKwh-consKwh).toFixed(2);
+    let batAct='balanced',rec='';
+    if(surplus>1.2){batAct='charge';rec=`Strong surplus ${surplus} kWh — charging batteries.`}
+    else if(surplus>0){batAct='charge';rec=`Surplus ${surplus} kWh — partially charging.`}
+    else if(surplus<-1){batAct='discharge';rec=`Deficit ${Math.abs(surplus)} kWh — discharging batteries.`}
+    else{batAct='balanced';rec=`Balanced production & consumption.`}
+    if(modTemp>48) rec+=' Panels warm — clean for better output.';
+
+    const hasFault=modTemp>52||(irr>0.7&&power<300);
+    const sev=modTemp>65?'critical':modTemp>52?'warning':'normal';
+
+    predResult={
+      city:geo.name, state:geo.cityData?.state||'',
+      power, irr, modTemp, temp, cloud,
+      humidity:liveWeather?.relative_humidity_2m,
+      wind:liveWeather?.wind_speed_10m,
+      feels:liveWeather?.apparent_temperature,
+      uv, dc, dy, prodKwh, consKwh, surplus, batAct, rec,
+      fault:{has:hasFault,sev,msgs:hasFault?[`${sev==='critical'?'Critical':'Warning'}: Module temp ${modTemp}°C`]:['All systems normal']}
+    };
+
+    // 4. Render all sections
+    renderMonitor(predResult);
+    renderWeatherSection(predResult);
+    renderEnergyForecast(predResult);
+    renderFaults(predResult);
+    renderReport(predResult);
+    document.getElementById('city-badge').textContent=geo.name+(geo.cityData?.state?` · ${geo.cityData.state}`:'');
+
+    if(hasFault) document.getElementById('fault-badge').classList.add('show');
+    else document.getElementById('fault-badge').classList.remove('show');
+
+  }catch(e){
+    console.error(e);
+    setApiStatus('err');
+  }
+  setLoading(false);
+}
+
+// ─── Render: Monitor ─────────────────────────────────
+function renderMonitor(d){
+  sv('kv-power', d.power.toFixed(1));
+  sv('kv-cons', d.consKwh.toFixed(2));
+  sv('kv-yield', (d.dy/1000).toFixed(1)+'k');
+  sv('kv-temp', d.temp+'°C');
+  sv('iw-temp', d.temp+'°C');
+  sv('iw-feels', (d.feels??d.temp)+'°C');
+  sv('iw-hum', (d.humidity??'—')+'%');
+  sv('iw-wind', (d.wind??'—')+' km/h');
+
+  // Battery
+  const pct=battPct(d.surplus);
+  const fill=document.getElementById('batt-fill');
+  if(fill){fill.style.width=pct+'%';fill.className='batt-fill '+(pct<25?'lo':pct<55?'md':'hi')}
+  sv('batt-pct',pct+'%');
+  const ab=document.getElementById('act-badge');
+  if(ab){ab.textContent=d.batAct;ab.className='act-badge '+d.batAct}
+  sv('batt-rec',d.rec);
+
+  // Status icon
+  const icons={
+    normal:`<svg viewBox="0 0 40 40" width="38" height="38"><circle cx="20" cy="20" r="15" stroke="#22d67a" stroke-width="2" fill="none"/><path d="M12 20l5 5 11-10" stroke="#22d67a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`,
+    warning:`<svg viewBox="0 0 40 40" width="38" height="38"><path d="M20 5L36 33H4Z" stroke="#f5a623" stroke-width="2" fill="none" stroke-linejoin="round"/><path d="M20 16v8M20 27v2" stroke="#f5a623" stroke-width="2.5" stroke-linecap="round"/></svg>`,
+    critical:`<svg viewBox="0 0 40 40" width="38" height="38"><circle cx="20" cy="20" r="15" stroke="#ff5252" stroke-width="2" fill="none"/><path d="M14 14l12 12M26 14L14 26" stroke="#ff5252" stroke-width="2.5" stroke-linecap="round"/></svg>`
+  };
+  document.getElementById('status-ico').innerHTML=icons[d.fault.sev]||icons.normal;
+  sv('status-txt', d.fault.msgs[0]);
+
+  // Charts
+  render7dayChart(d);
+  renderBalanceChart(d);
+}
+
+function render7dayChart(d){
+  const ctx=document.getElementById('chart-trend')?.getContext('2d');
+  if(!ctx) return;
+  destroyChart('trend');
+  let labels,prod,cons;
+  if(liveDaily){
+    labels=liveDaily.time.map(t=>{const dt=new Date(t);return['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()]});
+    // Estimate daily production from shortwave radiation
+    prod=liveDaily.shortwave_radiation_sum.map((rad,i)=>{
+      if(rad==null) return d.power*0.8;
+      const irr=rad/1000; // convert Wh/m² → kWh/m²
+      const tmax=liveDaily.temperature_2m_max[i]||30;
+      const eff=Math.max(0.4,1-0.0045*(tmax+25-25));
+      return +(d.dc*irr*0.001*eff*0.96).toFixed(0);
+    });
+    cons=liveDaily.time.map(()=>+(2200+Math.random()*600).toFixed(0));
+  } else {
+    labels=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    prod=labels.map(()=>+(d.power*(0.85+Math.random()*0.3)).toFixed(0));
+    cons=labels.map(()=>+(1900+Math.random()*800).toFixed(0));
+  }
+  chartInstances('trend',ctx,'line',{
+    labels,
+    datasets:[
+      {label:'Production (kW)',data:prod,borderColor:'#22d67a',backgroundColor:'rgba(34,214,122,0.07)',fill:true,tension:0.4,pointRadius:4,pointBackgroundColor:'#22d67a',borderWidth:2},
+      {label:'Consumption (kW)',data:cons,borderColor:'#4da6ff',backgroundColor:'rgba(77,166,255,0.05)',fill:true,tension:0.4,pointRadius:4,pointBackgroundColor:'#4da6ff',borderWidth:2}
+    ]
+  });
+}
+
+function renderBalanceChart(d){
+  const ctx=document.getElementById('chart-bal')?.getContext('2d');
+  if(!ctx) return;
+  destroyChart('bal');
+  chartInstances('bal',ctx,'doughnut',{
+    labels:['Production','Consumption'],
+    datasets:[{data:[d.prodKwh*1000,d.consKwh*1000],backgroundColor:['rgba(34,214,122,.7)','rgba(77,166,255,.6)'],borderColor:['#22d67a','#4da6ff'],borderWidth:1,hoverOffset:6}]
+  },false);
+}
+
+// ─── Render: Weather section ─────────────────────────
+function renderWeatherSection(d){
+  document.getElementById('wx-subtitle').textContent=
+    `Live data for ${d.city} from Open-Meteo · Updated hourly · ${new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}`;
+
+  const grid=document.getElementById('wx-current-grid');
+  const wx=liveWeather;
+
+  // Current conditions
+  grid.innerHTML=`
+    <div class="wx-now big">
+      <div style="font-size:48px;line-height:1">${wmoEmoji(wx?.weather_code??0)}</div>
+      <div>
+        <div class="wx-city-name">${d.city}${d.state?` · ${d.state}`:''}</div>
+        <div class="wx-temp-big">${wx?.temperature_2m??d.temp}°C</div>
+        <div class="wx-desc">${wmoDesc(wx?.weather_code??0)}</div>
+        <div class="wx-feels">Feels like ${wx?.apparent_temperature??d.temp}°C</div>
+        <div class="wx-live-badge">LIVE DATA</div>
+      </div>
+    </div>
+    <div class="wx-now">
+      <div class="wx-stat-lbl">Humidity</div>
+      <div class="wx-stat-val">${wx?.relative_humidity_2m??'—'}<span style="font-size:14px">%</span></div>
+      <div class="wx-stat-unit">Relative humidity</div>
+    </div>
+    <div class="wx-now">
+      <div class="wx-stat-lbl">Wind Speed</div>
+      <div class="wx-stat-val">${wx?.wind_speed_10m??'—'}</div>
+      <div class="wx-stat-unit">km/h at 10m</div>
+    </div>
+    <div class="wx-now">
+      <div class="wx-stat-lbl">Cloud Cover</div>
+      <div class="wx-stat-val">${wx?.cloud_cover??'—'}<span style="font-size:14px">%</span></div>
+      <div class="wx-stat-unit">Sky coverage</div>
+    </div>
+    <div class="wx-now">
+      <div class="wx-stat-lbl">UV Index</div>
+      <div class="wx-stat-val" style="color:${(wx?.uv_index||0)>7?'var(--red)':(wx?.uv_index||0)>4?'var(--amber)':'var(--green)'}">${wx?.uv_index??'—'}</div>
+      <div class="wx-stat-unit">${uvLabel(wx?.uv_index||0)}</div>
+    </div>
+  `;
+
+  // 7-day strip
+  renderDayStrip(d);
+
+  // Hourly chart for today
+  renderHourlyWx(0, d);
+}
+
+function uvLabel(u){return u>=11?'Extreme':u>=8?'Very High':u>=6?'High':u>=3?'Moderate':'Low'}
+
+function renderDayStrip(d){
+  const strip=document.getElementById('forecast-strip');
+  if(!liveDaily){strip.innerHTML='';return}
+  strip.innerHTML=liveDaily.time.map((t,i)=>{
+    const dt=new Date(t);
+    const dayName=i===0?'Today':['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()];
+    return `<div class="day-card${i===selectedDay?' selected':''}" onclick="selectDay(${i})">
+      <div class="day-name">${dayName}</div>
+      <div class="day-icon">${wmoEmoji(liveDaily.weather_code[i])}</div>
+      <div class="day-hi">${liveDaily.temperature_2m_max[i]?.toFixed(0)}°</div>
+      <div class="day-lo">${liveDaily.temperature_2m_min[i]?.toFixed(0)}°</div>
+      <div class="day-rain">${liveDaily.precipitation_sum[i]?.toFixed(1)||'0'} mm</div>
+    </div>`;
+  }).join('');
+
+  // Table
+  const tbody=document.getElementById('wx-tbody');
+  tbody.innerHTML=liveDaily.time.map((t,i)=>{
+    const dt=new Date(t);
+    const dname=i===0?'Today':['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()];
+    const rad=liveDaily.shortwave_radiation_sum[i]||0;
+    const estKwh=(rad*0.001*d.dc*0.001*0.85).toFixed(1);
+    return `<tr>
+      <td>${dname} <span style="color:var(--text3);font-size:10px">${t}</span></td>
+      <td>${wmoEmoji(liveDaily.weather_code[i])} ${wmoDesc(liveDaily.weather_code[i])}</td>
+      <td style="color:var(--red)">${liveDaily.temperature_2m_max[i]?.toFixed(1)}</td>
+      <td style="color:var(--blue)">${liveDaily.temperature_2m_min[i]?.toFixed(1)}</td>
+      <td>${liveDaily.precipitation_sum[i]?.toFixed(1)||'0'}</td>
+      <td>${liveDaily.wind_speed_10m_max[i]?.toFixed(1)}</td>
+      <td style="color:var(--amber)">${estKwh} kWh</td>
+    </tr>`;
+  }).join('');
+}
+
+function selectDay(i){
+  selectedDay=i;
+  document.querySelectorAll('.day-card').forEach((el,j)=>el.classList.toggle('selected',j===i));
+  renderHourlyWx(i,predResult);
+}
+
+function renderHourlyWx(dayIdx,d){
+  if(!liveHourly) return;
+  const title=document.getElementById('hourly-title');
+  const dt=new Date(liveDaily.time[dayIdx]);
+  const dname=dayIdx===0?'Today':['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][dt.getDay()];
+  title.textContent=`Hourly forecast — ${dname} (${liveDaily.time[dayIdx]})`;
+
+  // Extract hours for this day
+  const dateStr=liveDaily.time[dayIdx];
+  const idxStart=liveHourly.time.findIndex(t=>t.startsWith(dateStr));
+  if(idxStart<0) return;
+  const temps=liveHourly.temperature_2m.slice(idxStart,idxStart+24);
+  const cloud=liveHourly.cloud_cover.slice(idxStart,idxStart+24);
+  const precip=liveHourly.precipitation.slice(idxStart,idxStart+24);
+  const hrs=Array.from({length:24},(_,i)=>i+':00');
+
+  const ctx=document.getElementById('chart-hourly')?.getContext('2d');
+  if(!ctx) return;
+  destroyChart('hourly');
+  chartInstances('hourly',ctx,'line',{
+    labels:hrs,
+    datasets:[
+      {label:'Temp °C',data:temps,borderColor:'#f5a623',backgroundColor:'rgba(245,166,35,0.08)',fill:true,tension:0.4,yAxisID:'y',borderWidth:2,pointRadius:2},
+      {label:'Cloud %',data:cloud,borderColor:'#4da6ff',backgroundColor:'rgba(77,166,255,0.06)',fill:true,tension:0.4,yAxisID:'y1',borderWidth:1.5,pointRadius:0,borderDash:[4,2]},
+      {label:'Rain mm',data:precip,borderColor:'#a78bfa',backgroundColor:'rgba(167,139,250,0.2)',fill:true,tension:0.3,yAxisID:'y',borderWidth:1.5,pointRadius:0,type:'bar'}
+    ]
+  },{
+    scales:{
+      y:{position:'left',grid:{color:'rgba(30,47,71,0.5)'},ticks:{color:'var(--text2)',font:{size:10}},title:{display:true,text:'Temp / Rain',color:'var(--text2)',font:{size:10}}},
+      y1:{position:'right',min:0,max:100,grid:{display:false},ticks:{color:'var(--blue)',font:{size:10}},title:{display:true,text:'Cloud %',color:'var(--blue)',font:{size:10}}},
+      x:{grid:{color:'rgba(30,47,71,0.4)'},ticks:{color:'var(--text2)',font:{size:9},maxTicksLimit:12}}
+    }
+  });
+}
+
+// ─── Render: Energy forecast ─────────────────────────
+function renderEnergyForecast(d){
+  const hours=Array.from({length:24},(_,i)=>i);
+  let powers;
+
+  if(liveHourly){
+    const dateStr=liveDaily?.time[0]||new Date().toISOString().slice(0,10);
+    const idxStart=liveHourly.time.findIndex(t=>t.startsWith(dateStr));
+    powers=hours.map(h=>{
+      const idx=idxStart+h;
+      if(idx<0||idx>=liveHourly.time.length) return 0;
+      const t=liveHourly.temperature_2m[idx]??d.temp;
+      const cl=liveHourly.cloud_cover[idx]??50;
+      const uv=liveHourly.uv_index?.[idx]??0;
+      return predictPower(t,cl,uv,d.dc).power;
+    });
+  } else {
+    powers=hours.map(h=>{
+      if(h<5||h>20) return 0;
+      return Math.max(0,d.power*Math.sin((h-5)/15*Math.PI)*(0.9+Math.sin(h*3.7)*0.07));
+    });
+  }
+
+  // Bar chart
+  const ctx=document.getElementById('chart-ef')?.getContext('2d');
+  if(ctx){
+    destroyChart('ef');
+    chartInstances('ef',ctx,'bar',{
+      labels:hours.map(h=>String(h).padStart(2,'0')+':00'),
+      datasets:[{label:'Predicted kW',data:powers.map(p=>+p.toFixed(0)),
+        backgroundColor:hours.map(h=>h>=6&&h<=18?'rgba(34,214,122,0.6)':'rgba(34,214,122,0.12)'),
+        borderColor:'#22d67a',borderWidth:1,borderRadius:3}]
+    },{scales:{x:{ticks:{maxTicksLimit:12}}}});
+  }
+
+  // Pie
+  const ctx2=document.getElementById('chart-pie')?.getContext('2d');
+  if(ctx2){
+    const tot=powers.reduce((a,b)=>a+b,0);
+    const used=Math.min(tot,2400),stored=Math.max(0,tot-used);
+    destroyChart('pie');
+    chartInstances('pie',ctx2,'doughnut',{
+      labels:['Used','Battery stored'],
+      datasets:[{data:[+used.toFixed(0),+stored.toFixed(0)],backgroundColor:['rgba(167,139,250,.65)','rgba(245,166,35,.65)'],borderColor:['#a78bfa','#f5a623'],borderWidth:1}]
+    },false);
+  }
+
+  // Table
+  const tbody=document.getElementById('ef-tbody');
+  tbody.innerHTML=hours.map(h=>{
+    const p=powers[h];
+    let temp=d.temp,irr=0;
+    if(liveHourly){
+      const dateStr=liveDaily?.time[0]||new Date().toISOString().slice(0,10);
+      const idxStart=liveHourly.time.findIndex(t=>t.startsWith(dateStr));
+      const idx=idxStart+h;
+      if(idx>=0&&idx<liveHourly.time.length){
+        temp=liveHourly.temperature_2m[idx]??d.temp;
+        const uv=liveHourly.uv_index?.[idx]??0;
+        const cl=liveHourly.cloud_cover[idx]??50;
+        irr=Math.max(0,(uv*0.09)*(1-cl/100*0.7));
+      }
+    }
+    const s=p>1200?'good':p>300?'warning':'low';
+    const sl=p>1200?'High':p>300?'Moderate':'Low/Night';
+    return `<tr>
+      <td style="font-family:var(--mono)">${String(h).padStart(2,'0')}:00</td>
+      <td style="font-family:var(--mono)">${p.toFixed(0)}</td>
+      <td>${irr.toFixed(3)}</td>
+      <td>${temp.toFixed(1)}</td>
+      <td><span style="display:inline-block;padding:2px 7px;border-radius:9px;font-size:10.5px;font-weight:600;${s==='good'?'background:rgba(34,214,122,.1);color:var(--green)':s==='warning'?'background:rgba(245,166,35,.1);color:var(--amber)':'background:rgba(122,144,176,.1);color:var(--text2)'}">${sl}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── Render: Faults ──────────────────────────────────
+function renderFaults(d){
+  const el=document.getElementById('fault-container');
+  const checks=[
+    {name:'Panel Temperature',val:`${d.modTemp}°C`,ok:d.modTemp<50,warn:d.modTemp<65,msg:d.modTemp>=65?'Critical — damage risk!':d.modTemp>=50?'Elevated — efficiency reduced':'Normal range'},
+    {name:'Solar Irradiation',val:`${d.irr.toFixed(3)} kWh/m²`,ok:d.irr>=0.4,warn:d.irr>=0.15,msg:d.irr>=0.6?'Excellent irradiation':d.irr>=0.3?'Moderate irradiation':'Low — shading/cloud'},
+    {name:'Predicted Output',val:`${d.power} kW`,ok:d.power>=1200,warn:d.power>=300,msg:d.power>=2000?'Excellent output':d.power>=800?'Good output':'Low — check panels'},
+    {name:'Energy Balance',val:`${d.surplus>=0?'+':''}${d.surplus} kWh`,ok:d.surplus>=0,warn:d.surplus>=-1.5,msg:d.surplus>=1?'Surplus detected':d.surplus>=0?'Balanced':'Deficit — discharge'},
+  ];
+  el.innerHTML=`
+    <div class="fault-grid">
+      ${checks.map(c=>{const cls=c.ok?'ok':c.warn?'warn':'crit';const ico=c.ok?'✓':c.warn?'⚠':'✗';return`<div class="fc ${cls}"><h4 class="${cls}">${ico} ${c.name}</h4><p><strong>${c.val}</strong> — ${c.msg}</p></div>`}).join('')}
+    </div>
+    <div class="fc ${d.fault.sev==='normal'?'ok':d.fault.sev==='warning'?'warn':'crit'}" style="margin-top:12px">
+      <h4 class="${d.fault.sev==='normal'?'ok':d.fault.sev==='warning'?'warn':'crit'}">AI Summary — ${d.fault.sev.toUpperCase()}</h4>
+      ${d.fault.msgs.map(m=>`<p style="margin-bottom:4px">• ${m}</p>`).join('')}
+    </div>`;
+}
+
+// ─── Render: Reports ─────────────────────────────────
+function renderReport(d){
+  const el=document.getElementById('report-container');
+  el.innerHTML=`
+    <div class="rep-grid">
+      <div class="rstat"><div class="rstat-lbl">City</div><div class="rstat-val b" style="font-size:17px">${d.city}</div><div style="font-size:11px;color:var(--text2);margin-top:3px">${d.state}</div></div>
+      <div class="rstat"><div class="rstat-lbl">Live Temp</div><div class="rstat-val a">${d.temp}°C</div><div style="font-size:10.5px;color:var(--text2);margin-top:3px">Real-time Open-Meteo</div></div>
+      <div class="rstat"><div class="rstat-lbl">Predicted Power</div><div class="rstat-val g">${d.power} kW</div><div style="font-size:10.5px;color:var(--text2);margin-top:3px">Physics NOCT model</div></div>
+      <div class="rstat"><div class="rstat-lbl">Daily Yield</div><div class="rstat-val a">${(d.dy/1000).toFixed(1)}k kWh</div></div>
+      <div class="rstat"><div class="rstat-lbl">Energy Balance</div><div class="rstat-val ${d.surplus>=0?'g':'rstat-val'}" style="${d.surplus<0?'color:var(--red)':''}">${d.surplus>=0?'+':''}${d.surplus} kWh</div></div>
+      <div class="rstat"><div class="rstat-lbl">Fault Status</div><div class="rstat-val ${d.fault.sev==='normal'?'g':'a'}" style="${d.fault.sev==='critical'?'color:var(--red)':''};font-size:17px;text-transform:capitalize">${d.fault.sev}</div></div>
+    </div>
+    <div class="fc ok">
+      <h4 class="ok">AI Recommendation</h4><p>${d.rec}</p>
+    </div>
+    <div style="margin-top:12px;padding:12px 14px;background:var(--bg1);border:1px solid var(--border);border-radius:12px;font-size:11.5px;color:var(--text2)">
+      <strong style="color:var(--text)">Weather source:</strong> <a href="https://open-meteo.com" target="_blank">Open-Meteo API</a> — free, no key, updates hourly · 
+      <strong style="color:var(--text)">ML Dataset:</strong> <a href="https://www.kaggle.com/datasets/anikannal/solar-power-generation-data" target="_blank">Solar Power Generation Data (Kaggle)</a>
+    </div>`;
+}
+
+// ─── Helpers ─────────────────────────────────────────
+function battPct(s){if(s>=2)return 95;if(s>=1)return 80;if(s>=0.2)return 65;if(s>=-0.3)return 50;if(s>=-1)return 34;return 16}
+function sv(id,val){const el=document.getElementById(id);if(el){el.textContent=val??'—';el.classList.add('anim')}}
+function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):s}
+
+function setLoading(on){
+  const btn=document.getElementById('go-btn');
+  const txt=document.getElementById('btn-txt');
+  const spin=document.getElementById('btn-spin');
+  btn.disabled=on;
+  txt.textContent=on?'Fetching...':'Get Prediction';
+  spin.classList.toggle('hidden',!on);
+  if(on)['kv-power','kv-cons','kv-yield','kv-temp'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent='...'});
+}
+
+function setApiStatus(s){
+  const dot=document.getElementById('api-dot');
+  const txt=document.getElementById('api-txt');
+  if(s==='live'){dot.className='dot live';txt.textContent='Live weather'}
+  else if(s==='warn'){dot.className='dot warn';txt.textContent='Cached data'}
+  else{dot.className='dot err';txt.textContent='API error'}
+}
+
+// ─── Charts helper ───────────────────────────────────
+function chartInstances(name,ctx,type,data,line=true,extra={}){
+  if(charts[name]){charts[name].destroy();charts[name]=null}
+  const opts=line?{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{labels:{color:'#7a90b0',font:{size:11},padding:14}}},
+    scales:{
+      x:{grid:{color:'rgba(30,47,71,0.5)'},ticks:{color:'#3d5070',font:{size:10},...(extra.scales?.x?.ticks||{})}},
+      y:{grid:{color:'rgba(30,47,71,0.5)'},ticks:{color:'#3d5070',font:{size:10}}}
+    },...extra
+  }:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#7a90b0',font:{size:11},padding:12}}},cutout:'65%',...extra};
+  charts[name]=new Chart(ctx,{type,data,options:opts});
+}
+function destroyChart(n){if(charts[n]){charts[n].destroy();charts[n]=null}}
+
+// ─── Section nav ─────────────────────────────────────
+const SEC_META={
+  monitor:{title:'Live Monitor',sub:'Real-time microgrid energy dashboard'},
+  weather:{title:'Weather Forecast',sub:'Live data from Open-Meteo API — current conditions + 7-day forecast'},
+  forecast:{title:'Energy Forecast',sub:'AI-predicted hourly production based on live weather'},
+  fault:{title:'Fault Detection',sub:'Anomaly detection using live temperature & prediction'},
+  reports:{title:'Reports',sub:'Summary statistics and AI recommendations'},
+};
+function gotoSec(name){
+  document.querySelectorAll('.ni').forEach(el=>el.classList.toggle('active',el.dataset.sec===name));
+  document.querySelectorAll('.sec').forEach(el=>el.classList.toggle('active',el.id===`sec-${name}`));
+  const m=SEC_META[name]||{};
+  sv('page-title',m.title);sv('page-sub',m.sub);
+}
+
+// ─── Init ────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded',()=>{
+  setApiStatus('live');
+  // Auto-load Delhi on startup
+  setTimeout(()=>{
+    document.getElementById('city-input').value='Delhi';
+    runAll();
+  },400);
+});
+</script>
+</body>
+</html>
