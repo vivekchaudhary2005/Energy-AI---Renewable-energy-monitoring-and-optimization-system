@@ -1,0 +1,2 @@
+# Energy-AI---Renewable-energy-monitoring-and-optimization-system
+EnergyAI an AI-powered microgrid energy dashboard for Indian cities. It combines real-time weather (Open-Meteo API) with physics-based NOCT solar prediction model to forecast hourly power output, track battery/energy balance, detect system faults via anomaly detection, and generate actionable AI recommendations through live monitoring and reports.
